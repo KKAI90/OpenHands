@@ -245,6 +245,11 @@ export interface CloudIntegrationsConfig {
    * for an OpenHands Enterprise install, or null when it reports neither.
    */
   deploymentMode: string | null;
+  /**
+   * Whether the instance enables service accounts, and with them service
+   * account automation owners.
+   */
+  isServiceAccountsEnabled: boolean;
 }
 
 export async function fetchCloudIntegrationsConfig(): Promise<CloudIntegrationsConfig> {
@@ -256,6 +261,7 @@ export async function fetchCloudIntegrationsConfig(): Promise<CloudIntegrationsC
       enable_jira?: boolean;
       enable_linear?: boolean;
       deployment_mode?: string;
+      enable_service_accounts?: boolean;
     };
   }>({
     backend,
@@ -268,6 +274,8 @@ export async function fetchCloudIntegrationsConfig(): Promise<CloudIntegrationsC
     isLinearEnabled: config.feature_flags?.enable_linear === true,
     isSlackEnabled: config.slack_enabled === true,
     deploymentMode: config.feature_flags?.deployment_mode ?? null,
+    isServiceAccountsEnabled:
+      config.feature_flags?.enable_service_accounts === true,
   };
 }
 

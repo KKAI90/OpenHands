@@ -15,6 +15,10 @@ import {
 } from "#/api/cloud/organization-service.api";
 import ProfilesService from "#/api/profiles-service/profiles-service.api";
 import {
+  fetchCloudIntegrationsConfig,
+  type CloudIntegrationsConfig,
+} from "#/api/cloud/settings-service.api";
+import {
   __resetActiveStoreForTests,
   setActiveSelection,
   setRegisteredBackends,
@@ -69,6 +73,27 @@ vi.mock("#/api/cloud/organization-service.api", async (importOriginal) => ({
   getCloudOrganizationMember: vi.fn(),
   listCloudServiceAccounts: vi.fn(),
 }));
+
+// Mock only the web-client config read, which gates the service account owner
+// UI on the instance's `enable_service_accounts` flag.
+vi.mock("#/api/cloud/settings-service.api", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("#/api/cloud/settings-service.api")
+  >()),
+  fetchCloudIntegrationsConfig: vi.fn(),
+}));
+
+function mockServiceAccountsEnabled(isServiceAccountsEnabled: boolean) {
+  const config: CloudIntegrationsConfig = {
+    providersConfigured: [],
+    isJiraEnabled: false,
+    isLinearEnabled: false,
+    isSlackEnabled: false,
+    deploymentMode: null,
+    isServiceAccountsEnabled,
+  };
+  vi.mocked(fetchCloudIntegrationsConfig).mockResolvedValue(config);
+}
 
 const detailMocks = vi.hoisted(() => ({
   createConversationMutate: vi.fn(),
@@ -182,6 +207,8 @@ beforeEach(() => {
     profiles: [],
     active_profile: null,
   });
+  vi.mocked(fetchCloudIntegrationsConfig).mockReset();
+  mockServiceAccountsEnabled(false);
   detailMocks.createConversationMutate.mockReset();
   detailMocks.navigate.mockReset();
   setRegisteredBackends([localBackend, cloudBackend]);
@@ -484,6 +511,7 @@ describe("AutomationDetail — service account owner", () => {
       triggers: {},
       features: ["serviceAccountOwners"],
     });
+    mockServiceAccountsEnabled(true);
     vi.mocked(AutomationService.getAutomation).mockResolvedValue(
       serviceAutomation,
     );
@@ -666,6 +694,26 @@ describe("AutomationDetail — service account owner", () => {
     expect(
       screen.queryByRole("button", { name: I18nKey.AUTOMATIONS$TRANSFER }),
     ).not.toBeInTheDocument();
+  });
+
+  it("does not offer Transfer or list service accounts when the instance disables service accounts", async () => {
+    // Arrange
+    mockServiceAccountsEnabled(false);
+    const user = userEvent.setup();
+    renderDetail();
+    await screen.findByText(automation.name);
+    await waitFor(() =>
+      expect(fetchCloudIntegrationsConfig).toHaveBeenCalled(),
+    );
+
+    // Act
+    await user.click(screen.getByLabelText(I18nKey.AUTOMATIONS$ACTIONS_MENU));
+
+    // Assert
+    expect(
+      screen.queryByRole("button", { name: I18nKey.AUTOMATIONS$TRANSFER }),
+    ).not.toBeInTheDocument();
+    expect(listCloudServiceAccounts).not.toHaveBeenCalled();
   });
 
   it("does not offer Transfer on a local backend", async () => {
